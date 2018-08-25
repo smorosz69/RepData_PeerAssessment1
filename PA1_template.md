@@ -66,7 +66,6 @@ MydataComplete <- Mydata %>% mutate (weekday = weekdays(as.Date(Mydata$date))) %
 
 
 #Create data set without misssing values and with missing values
-
 WithOut <-  na.exclude(MydataComplete)
 With <- MydataComplete
 ```
@@ -76,60 +75,60 @@ With <- MydataComplete
 
 ```r
 #Count total steps per day
-ts <- tapply(WithOut$steps, WithOut$date , sum)
+ts <- tapply(WithOut$steps, WithOut$date , sum, na.rm=T)
 TotalStepDay <- data.frame(date = names(ts), sum = ts)
+
+original <- na.exclude(TotalStepDay)
 ```
 
 
 ```r
 #Histogram of total steps per day
-hist(TotalStepDay$sum, main = "Total Steps Taken per Day", xlab = "Steps")
+hist(original$sum, main = "Total Steps Taken per Day", xlab = "Steps")
 ```
 
 ![](PA1_template_files/figure-html/Histogram of total steps per day -1.png)<!-- -->
+
+```r
+#Mean number of steps per Day
+mean(original$sum)
+```
+
+```
+## [1] 10766.19
+```
+
+```r
+#Median number of steps per Day
+median(original$sum)
+```
+
+```
+## [1] 10765
+```
 
 
 ## What is the average daily activity pattern?
 
 ```r
-#Mean total steps per day
-m1 <- tapply(WithOut$steps, WithOut$date , mean)
-MeanStepDay <- data.frame(date = names(m1), DateMean = m1)
-preMedianStepDay <- WithOut %>% filter(WithOut$steps > 0)
+IntervalDailyPaterns <- tapply(WithOut$steps, WithOut$interval, mean)
 
-
-#Median total steps per day
-md <- tapply(preMedianStepDay$steps, preMedianStepDay$date , median)
-MedianStepDay <- data.frame(date = names(md), DateMedian = md)
+plot(IntervalDailyPaterns ~ unique(WithOut$interval), type="l", xlab = "Interval", ylab = "Number of Steps", main = "Average Daily Activity Pattern")
 ```
+
+![](PA1_template_files/figure-html/Mean and median number of Steps per Day-1.png)<!-- -->
 
 ```r
-#Create plot of mean steps per day
-plot(MeanStepDay$date,MeanStepDay$DateMean, type = "l", xlab = "Date", ylab = "Mean", main = "Mean steps per Day")
-#Add lines
-lines(MeanStepDay$date,MeanStepDay$DateMean, type = "l")
+#Which 5 minute interval, on average, contains maximum number of steps
+IntervalDailyPaterns[which.max(IntervalDailyPaterns)]
 ```
 
-![](PA1_template_files/figure-html/Plot of mean steps per day-1.png)<!-- -->
-
-
-```r
-#Create plot of median steps per day
-plot(MedianStepDay$date,MedianStepDay$DateMedian, type = "l", xlab = "Date", ylab = "Median", main = "Median steps per Day")
-#Add lines
-lines(MedianStepDay$date,MedianStepDay$DateMedian, type = "l")
+```
+##      835 
+## 206.1698
 ```
 
-![](PA1_template_files/figure-html/Plot of median steps per day-1.png)<!-- -->
-k
 
-```r
-#That is the average daily activity pattern?
-#Saturday has the highest step average than the rest of the wee
-FiveInterval <- WithOut  %>% mutate(FiveInterval = ((steps / interval) * 1.0) * 5)
-m2 <- tapply(FiveInterval$steps, FiveInterval$weekdayNum,  mean)
-MeanWeekDays <- data.frame(day = names(m2), mean = m2)
-```
 
 ## Imputing missing values
 
@@ -144,53 +143,88 @@ sum(is.na(With$steps))
 ```
 
 ```r
-#Calculate mean and median per interval of steps. This will be used for days with NA for steps
-#Date could not be used for NA data since no step data for them.
-#produce mean average
-m3 <- tapply(WithOut$steps, WithOut$interval , mean)
-MeanStepInterval <- data.frame(interval = names(m3), IntervalMean = m3)
+#Calculate mean per interval of steps. This will be used for NA steps
+MeanIntervalNoNA <- tapply(WithOut$steps, WithOut$interval , mean)
 
-#produce median average
-m4 <- tapply(WithOut$steps, WithOut$interval , median) 
-MedianStepInterval <- data.frame(interval = names(m4), IntervalMedian = m4)
+CorrectedStep <- data.frame(interval = names(MeanIntervalNoNA), IntervalMean = round(MeanIntervalNoNA))
 
+NeedsFixing <-With %>% filter(is.na(With$steps))
 
-#Calculate Final Mean average for each day
-CombinedFile <- merge(With, MeanStepInterval, by = "interval")
-CombinedFile <- merge(CombinedFile, MeanStepDay, by = "date")
-CombinedFile <- mutate(CombinedFile, FinalMean = ifelse(is.na(CombinedFile$DateMean), 
-            CombinedFile$IntervalMean, CombinedFile$DateMean))
+stageFix <- merge(NeedsFixing, CorrectedStep, by = "interval")
 
-#Calculate Final Median average for each day
-CombinedFile <- merge(CombinedFile, MedianStepInterval, by = "interval")
-CombinedFile <- merge(CombinedFile, MedianStepDay, by = "date")
-CombinedFile <- mutate(CombinedFile, FinalMedian = ifelse(is.na(CombinedFile$DateMedian), 
-            CombinedFile$IntervalMedian, CombinedFile$DateMedian))
+corrected <- data.frame(steps = stageFix$IntervalMean,
+date = stageFix$date, interval = stageFix$interval, weekday = stageFix$weekday, weekdayNum = stageFix$weekdayNum)
 
-#Count total steps per day
-ts2 <- tapply(With$steps, With$date , sum)
-
-TotalStepDayAll <- data.frame(date = names(ts2), sum = ts2)
-
-TotalStepDayAll<- mutate(TotalStepDayAll, FinalSum = ifelse(is.na(TotalStepDayAll$sum), 
-            0, TotalStepDayAll$sum))
+Fixed <- rbind(corrected, WithOut)
 ```
 
 
 
 ```r
-##The frequency of total steps per day with NA data that was imputed shows more frequency counts in 0 - 5000 step range than before. The rest of buckets are identical.
-#Histogram of total steps per day
-hist(TotalStepDayAll$FinalSum, main = "Histogram of total steps per day for all data")
+FixedSum <- tapply(Fixed$steps, Fixed$date , sum)
+FixedTotalStepDay <- data.frame(date = names(FixedSum), sum = FixedSum)
+
+
+hist(FixedTotalStepDay$sum, main = "Histogram of total steps per day for Fixed Data")
 ```
 
 ![](PA1_template_files/figure-html/Histogram of total steps per day for all data -1.png)<!-- -->
 
 ```r
-hist(TotalStepDay$sum, main = "Histogram of total steps per day for only complete data")
+#Mean number of steps per Day without NA Data
+mean(FixedTotalStepDay$sum)
 ```
 
-![](PA1_template_files/figure-html/Histogram of total steps per day for all data -2.png)<!-- -->
+```
+## [1] 10765.64
+```
+
+```r
+#Mean number of steps per Day with NA fix
+mean(original$sum)
+```
+
+```
+## [1] 10766.19
+```
+
+```r
+#Median number of steps per Day without NA Data
+median(FixedTotalStepDay$sum)
+```
+
+```
+## [1] 10762
+```
+
+```r
+#Median number of steps per Day with NA fix
+median(original$sum)
+```
+
+```
+## [1] 10765
+```
+
+```r
+#Fixed data
+summary(FixedTotalStepDay$sum)
+```
+
+```
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##      41    9819   10762   10766   12811   21194
+```
+
+```r
+#Original data
+summary(original$sum)
+```
+
+```
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##      41    8841   10765   10766   13294   21194
+```
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
@@ -198,57 +232,30 @@ hist(TotalStepDay$sum, main = "Histogram of total steps per day for only complet
 
 
 ```r
-#CombinedFile
-
-#Create weekend subset 
-SatSun <- c("Saturday", "Sunday")
-weekend <- subset(CombinedFile, weekday %in% (SatSun))
-
-#Create weekday subset
 Wkdays <- c("Monday","Tuesday","Wednesday","Thursday","Friday")
-weekdays <- subset(CombinedFile, weekday %in% (Wkdays))
+
+weekendText <- c("weekend")
+weekdayText <- c("weekday")
+
+wkDayEnd <- Fixed %>% mutate(weekType = ifelse(Fixed$weekday %in% (Wkdays),weekdayText,weekendText))
+
+
+weekDayData <- wkDayEnd %>% filter(wkDayEnd$weekType == weekdayText)
+
+weekEndData <- wkDayEnd %>% filter(wkDayEnd$weekType == weekendText)
+
+IntervalMeanWeekDay <- tapply(weekDayData$steps, weekDayData$interval, mean)
+
+IntervalMeanWeekEnd <- tapply(weekEndData$steps, weekEndData$interval, mean)
+
+plot(IntervalMeanWeekDay ~ unique(wkDayEnd$interval), type="l", xlab = "Interval", ylab = "Number of Steps", main = "Weekday")
 ```
 
+![](PA1_template_files/figure-html/Compare weekdays to weekends -1.png)<!-- -->
 
 ```r
-#Get the 5 minute interval mean for NA rows
-naSet <- CombinedFile[is.na(CombinedFile$steps),] %>% select(steps,date,interval, weekday, weekdayNum, FinalMean)
-#naFiveInterval <- subset(naSet, interval == 5)
-
-#Calculate five minute interal for NA file
-naFiveInterval <- naSet  %>% mutate(FiveInterval = ((FinalMean / interval) * 1.0) * 5) %>% select(steps,date,interval, weekday, weekdayNum, FiveInterval)
-
-#Combine the two five interval files into one
-CombinedFiveInterval <- rbind(FiveInterval, naFiveInterval)
-
-CombinedFiveIntervalFinal  <- na.exclude(CombinedFiveInterval) 
-CombinedFiveIntervalFinal <- subset(CombinedFiveIntervalFinal, interval > 0 )
-
-
-#Create weekday subset
-Wkdays <- c("Monday","Tuesday","Wednesday","Thursday","Friday")
-weekdays <- subset(CombinedFiveIntervalFinal, weekday %in% (Wkdays))
-
-w1 <- tapply(weekdays$steps, weekdays$weekdayNum,  mean)
-
-weekdayAverage <- data.frame(day = names(w1), mean = w1)
-
-#Create weekend subset 
-SatSun <- c("Saturday", "Sunday")
-weekend <- subset(CombinedFiveIntervalFinal, weekday %in% (SatSun))
-
-w2 <- tapply(weekend$steps, weekend$weekdayNum,  mean)
-
-weekendAverage <- data.frame(day = names(w2), mean = w2)
-
-#Display time series of average steps for week days and then weekend days
-par(mfrow=c(1,2))
-
-plot(weekdayAverage$mean, weekdayAverage$day, type = "l", xlab = "Average Steps per Day", ylab = "Day of Week", main = "Weekday average steps all data")
-
-
-plot(weekendAverage$mean, weekendAverage$day, type = "l", xlab = "Average Steps per Day", ylab = "Day of Week", main = "Weekend average steps all data")
+plot(IntervalMeanWeekEnd ~ unique(wkDayEnd$interval), type="l", xlab = "Interval", ylab = "Number of Steps", main = "Weekend")
 ```
 
-![](PA1_template_files/figure-html/Five minute interval for all data-1.png)<!-- -->
+![](PA1_template_files/figure-html/Compare weekdays to weekends -2.png)<!-- -->
 
